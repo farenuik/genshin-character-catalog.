@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Запустить приложение",
+            "request": "launch",
+            "mainClass": "com.myproject.Main",
+            "projectName": "app",
+            "args": ["--chars"]
+        }
+    ]
+}
