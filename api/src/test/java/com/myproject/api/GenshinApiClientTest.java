@@ -1,6 +1,7 @@
 package com.myproject.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.myproject.game.Character;
@@ -57,6 +58,8 @@ class GenshinApiClientTest {
         assertEquals("Pyro", character.getProfile().element());
         assertEquals("Bow", character.getProfile().weaponType());
         assertEquals(2, character.getProfile().skills().size());
+        assertEquals("http://127.0.0.1:" + server.getAddress().getPort() + "/characters/amber/icon",
+                character.getProfile().imageUrl());
         assertTrue(character.getHealth() >= 1600 && character.getHealth() <= 2000);
         assertTrue(character.getArmor() >= 120 && character.getArmor() <= 170);
         assertTrue(character.getAttack() >= 180 && character.getAttack() <= 245);
@@ -66,6 +69,26 @@ class GenshinApiClientTest {
         assertEquals(41, weapon.getAttackBonus());
         assertEquals("Bow", weapon.getWeaponType());
         assertTrue(weapon.getDescription().contains("CRIT"));
+    }
+
+    @Test
+    void parsesApiJsonIntoImmutableCatalogEntryWithoutInventingCombatStats() throws IOException {
+        CharacterCatalogEntry entry = client.getCharacterCatalogEntry("amber");
+
+        assertEquals("amber", entry.id());
+        assertEquals("Amber", entry.name());
+        assertEquals("A reliable outrider.", entry.description());
+        assertEquals(4, entry.rarity());
+        assertEquals("Pyro", entry.element());
+        assertEquals("Bow", entry.weaponType());
+        assertEquals("http://127.0.0.1:" + server.getAddress().getPort() + "/characters/amber/icon",
+                entry.imageUrl());
+        assertEquals(List.of("Combat", "Passive"),
+                entry.skills().stream().map(skill -> skill.type()).toList());
+        assertFalse(entry.skills().isEmpty());
+        org.junit.jupiter.api.Assertions.assertThrows(
+                UnsupportedOperationException.class,
+                () -> entry.skills().add(entry.skills().get(0)));
     }
 
     private static void respond(com.sun.net.httpserver.HttpExchange exchange, String body) throws IOException {

@@ -12,5 +12,19 @@ public interface GenshinDataSource {
 
     Character getCharacter(String id) throws IOException;
 
+    default CharacterCatalogEntry getCharacterCatalogEntry(String id) throws IOException {
+        Character character = getCharacter(id);
+        var profile = character.getProfile();
+        return new CharacterCatalogEntry(
+                profile.apiId(),
+                character.getName(),
+                profile.description(),
+                profile.rarity(),
+                profile.element(),
+                profile.weaponType(),
+                profile.imageUrl(),
+                profile.skills());
+    }
+
     Equipment getWeapon(String id) throws IOException;
 }

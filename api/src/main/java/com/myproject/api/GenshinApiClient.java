@@ -47,26 +47,38 @@ public final class GenshinApiClient implements GenshinDataSource {
 
     @Override
     public Character getCharacter(String id) throws IOException {
-        JsonNode data = getJson("/characters/" + encode(id) + "?lang=en");
-        String name = text(data, "name", id);
-        int rarity = integer(data, "rarity", 4);
+        CharacterCatalogEntry entry = getCharacterCatalogEntry(id);
+        CharacterProfile profile = new CharacterProfile(
+                entry.id(),
+                entry.description(),
+                entry.rarity(),
+                entry.element(),
+                entry.weaponType(),
+                entry.skills(),
+                entry.imageUrl());
+        int health = randomStat(800 + entry.rarity() * 200, 1000 + entry.rarity() * 250);
+        int armor = randomStat(40 + entry.rarity() * 20, 70 + entry.rarity() * 25);
+        int attack = randomStat(60 + entry.rarity() * 30, 105 + entry.rarity() * 35);
+        return new Character(entry.name(), health, armor, attack, profile);
+    }
+
+    @Override
+    public CharacterCatalogEntry getCharacterCatalogEntry(String id) throws IOException {
+        String encodedId = encode(id);
+        JsonNode data = getJson("/characters/" + encodedId + "?lang=en");
         List<CharacterSkill> skills = new ArrayList<>();
         appendSkills(skills, data.path("skillTalents"), "Combat");
         appendSkills(skills, data.path("passiveTalents"), "Passive");
         appendSkills(skills, data.path("constellations"), "Constellation");
-
-        CharacterProfile profile = new CharacterProfile(
+        return new CharacterCatalogEntry(
                 id,
+                text(data, "name", id),
                 text(data, "description", ""),
-                rarity,
+                integer(data, "rarity", 4),
                 text(data, "vision", ""),
                 text(data, "weapon", ""),
-                skills,
-                baseUrl + "/characters/" + encode(id) + "/icon");
-        int health = randomStat(800 + rarity * 200, 1000 + rarity * 250);
-        int armor = randomStat(40 + rarity * 20, 70 + rarity * 25);
-        int attack = randomStat(60 + rarity * 30, 105 + rarity * 35);
-        return new Character(name, health, armor, attack, profile);
+                baseUrl + "/characters/" + encodedId + "/icon",
+                skills);
     }
 
     @Override
