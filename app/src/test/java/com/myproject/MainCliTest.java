@@ -16,6 +16,11 @@ class MainCliTest {
     }
 
     @Test
+    void resolvesGraphicalCatalogModeFromCliArgs() {
+        assertEquals(Main.Mode.GUI, Main.resolveMode(new String[] {"--gui"}));
+    }
+
+    @Test
     void usesDefaultTextModeWhenNoOptionsProvided() {
         assertEquals(Main.Mode.TEXT, Main.resolveMode(new String[0]));
     }
