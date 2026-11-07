@@ -21,6 +21,7 @@ public final class GameCli {
     private final AbilityProvider abilityProvider;
     private final GenshinDataSource dataSource;
     private final CharacterCatalogStore characterStore;
+    private final PortraitCache portraitCache;
     private final Map<String, Character> characters = new LinkedHashMap<>();
     private final Map<String, Equipment> items = new LinkedHashMap<>();
     private final Map<String, Ability> abilities = new LinkedHashMap<>();
@@ -42,10 +43,20 @@ public final class GameCli {
             AbilityProvider abilityProvider,
             GenshinDataSource dataSource,
             CharacterCatalogStore characterStore) {
+        this(input, abilityProvider, dataSource, characterStore, FilePortraitCache.defaultCache());
+    }
+
+    public GameCli(
+            BufferedReader input,
+            AbilityProvider abilityProvider,
+            GenshinDataSource dataSource,
+            CharacterCatalogStore characterStore,
+            PortraitCache portraitCache) {
         this.input = Objects.requireNonNull(input, "input");
         this.abilityProvider = Objects.requireNonNull(abilityProvider, "abilityProvider");
         this.dataSource = Objects.requireNonNull(dataSource, "dataSource");
         this.characterStore = Objects.requireNonNull(characterStore, "characterStore");
+        this.portraitCache = Objects.requireNonNull(portraitCache, "portraitCache");
     }
 
     public void run() throws IOException {
@@ -106,6 +117,7 @@ public final class GameCli {
             Character character = dataSource.getCharacter(id);
             characters.put(id, character);
             saveCharacters();
+            cachePortrait(character);
             System.out.println("Character imported: " + character.getName() + " (" + id + ")");
             printCharacter(character);
             return;
@@ -134,7 +146,20 @@ public final class GameCli {
         Character character = new Character(name, health, armor, attack, profile);
         characters.put(name, character);
         saveCharacters();
+        cachePortrait(character);
         System.out.println("Character created: " + name);
+    }
+
+    private void cachePortrait(Character character) {
+        String imageUrl = character.getProfile().imageUrl();
+        if (imageUrl.isBlank()) return;
+
+        try {
+            System.out.println("Portrait cached: " + portraitCache.cache(imageUrl));
+        } catch (IOException exception) {
+            System.err.println("Could not cache portrait for " + character.getName()
+                    + ": " + exception.getMessage());
+        }
     }
 
     private void createItem(List<String> arguments) throws IOException {

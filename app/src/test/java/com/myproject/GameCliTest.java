@@ -58,7 +58,8 @@ class GameCliTest {
             System.setOut(capturedOut);
             new GameCli(new BufferedReader(new StringReader(commands)),
                     new com.myproject.game.DefaultAbilityProvider(), dataSource,
-                    new CharacterCatalogStore(temporaryDirectory.resolve("characters.json"))).run();
+                    new CharacterCatalogStore(temporaryDirectory.resolve("characters.json")),
+                    imageUrl -> temporaryDirectory.resolve("amber.img")).run();
         } finally {
             System.setOut(originalOut);
         }
@@ -108,7 +109,8 @@ class GameCliTest {
         try (PrintStream capturedOut = new PrintStream(output, true, StandardCharsets.UTF_8)) {
             System.setOut(capturedOut);
             new GameCli(new BufferedReader(new StringReader("ls char\nls char --id Traveler\nexit\n")),
-                    new com.myproject.game.DefaultAbilityProvider(), emptyDataSource, store).run();
+                    new com.myproject.game.DefaultAbilityProvider(), emptyDataSource, store,
+                    imageUrl -> temporaryDirectory.resolve("traveler.img")).run();
         } finally {
             System.setOut(originalOut);
         }
@@ -122,6 +124,7 @@ class GameCliTest {
     private void runCli(String commands, GenshinDataSource dataSource, CharacterCatalogStore store)
             throws IOException {
         new GameCli(new BufferedReader(new StringReader(commands)),
-                new com.myproject.game.DefaultAbilityProvider(), dataSource, store).run();
+                new com.myproject.game.DefaultAbilityProvider(), dataSource, store,
+                imageUrl -> temporaryDirectory.resolve("created.img")).run();
     }
 }
