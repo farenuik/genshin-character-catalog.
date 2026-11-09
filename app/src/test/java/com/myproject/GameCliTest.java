@@ -121,6 +121,120 @@ class GameCliTest {
         assertTrue(result.contains("Graphic (https://example.test/traveler.png)"));
     }
 
+    @Test
+    void runsTurnBasedGameAndStopsAcceptingActionsAfterWinnerIsDeclared() throws IOException {
+        GenshinDataSource emptyDataSource = new GenshinDataSource() {
+            @Override
+            public List<String> listCharacterIds() {
+                return List.of();
+            }
+
+            @Override
+            public List<String> listWeaponIds() {
+                return List.of();
+            }
+
+            @Override
+            public Character getCharacter(String id) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Equipment getWeapon(String id) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        String commands = "create char A 100 0 60\ncreate char B 100 0 60\n"
+                + "game start A B\nturn attack B\nturn defend\nturn attack B\nturn attack A\n"
+                + "turn attack B\nturn attack B\ngame status\nexit\n";
+
+        String result = runCliAndCapture(commands, emptyDataSource,
+                new CharacterCatalogStore(temporaryDirectory.resolve("characters.json")));
+
+        assertTrue(result.contains("Current turn: A"));
+        assertTrue(result.contains("Next turn: B"));
+        assertTrue(result.contains("B attacks A for 60 damage."));
+        assertTrue(result.contains("Winner: A"));
+        assertTrue(result.contains("Error: The game is over; winner: A"));
+        assertTrue(result.contains("B: HP=0"));
+    }
+
+    @Test
+    void savesGameStateHistoryAndAbilitiesForLoadingInANewCli() throws IOException {
+        GenshinDataSource emptyDataSource = new GenshinDataSource() {
+            @Override
+            public List<String> listCharacterIds() {
+                return List.of();
+            }
+
+            @Override
+            public List<String> listWeaponIds() {
+                return List.of();
+            }
+
+            @Override
+            public Character getCharacter(String id) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public Equipment getWeapon(String id) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        CharacterCatalogStore characterStore =
+                new CharacterCatalogStore(temporaryDirectory.resolve("characters.json"));
+        GameSaveStore gameSaveStore = new GameSaveStore(temporaryDirectory.resolve("last-game.json"));
+
+        String firstRun = runCliAndCapture(
+                "create char A 120 0 60\ncreate char B 100 0 60\n"
+                        + "create ability spark attack\nadd --char_id A --id spark\n"
+                        + "game start A B\nturn ability spark B\nturn defend\nexit\n",
+                emptyDataSource, characterStore, gameSaveStore);
+
+        assertTrue(java.nio.file.Files.exists(temporaryDirectory.resolve("last-game.json")));
+        assertTrue(firstRun.contains("A casts Fireball on B for 12 damage."));
+
+        String resumedRun = runCliAndCapture(
+                "game load\ngame status\ngame history\nturn attack B\ngame history\nexit\n",
+                emptyDataSource, characterStore, gameSaveStore);
+
+        assertTrue(resumedRun.contains("Game loaded."));
+        assertTrue(resumedRun.contains("B: HP=88"));
+        assertTrue(resumedRun.contains("Current turn: A"));
+        assertTrue(resumedRun.contains("Turn 1 - A: A casts Fireball on B for 12 damage."));
+        assertTrue(resumedRun.contains("Turn 2 - B: B braces for the next attack."));
+        assertTrue(resumedRun.contains("Turn 3 - A: A attacks B for 30 damage."));
+        assertTrue(resumedRun.contains("Next turn: B"));
+    }
+
+    private String runCliAndCapture(String commands, GenshinDataSource dataSource, CharacterCatalogStore store)
+            throws IOException {
+        return runCliAndCapture(
+                commands,
+                dataSource,
+                store,
+                new GameSaveStore(temporaryDirectory.resolve("test-game-save.json")));
+    }
+
+    private String runCliAndCapture(
+            String commands,
+            GenshinDataSource dataSource,
+            CharacterCatalogStore store,
+            GameSaveStore gameSaveStore) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        PrintStream originalOut = System.out;
+        try (PrintStream capturedOut = new PrintStream(output, true, StandardCharsets.UTF_8)) {
+            System.setOut(capturedOut);
+            new GameCli(new BufferedReader(new StringReader(commands)),
+                    new com.myproject.game.DefaultAbilityProvider(), dataSource, store,
+                    imageUrl -> temporaryDirectory.resolve("created.img"), gameSaveStore).run();
+        } finally {
+            System.setOut(originalOut);
+        }
+        return output.toString(StandardCharsets.UTF_8);
+    }
+
     private void runCli(String commands, GenshinDataSource dataSource, CharacterCatalogStore store)
             throws IOException {
         new GameCli(new BufferedReader(new StringReader(commands)),

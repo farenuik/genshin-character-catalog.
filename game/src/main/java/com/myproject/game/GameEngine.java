@@ -18,6 +18,8 @@ public interface GameEngine {
 
     String defend();
 
+    String heal(int amount);
+
     boolean isOver();
 
     Character getWinner();

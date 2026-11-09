@@ -18,6 +18,15 @@ public final class GameMemento {
         this.started = started;
     }
 
+    /** Captures a started session using its restored roster and active turn. */
+    public static GameMemento capture(List<Character> players, int currentPlayerIndex) {
+        if (players == null || players.size() < 2
+                || currentPlayerIndex < 0 || currentPlayerIndex >= players.size()) {
+            throw new IllegalArgumentException("Invalid game state");
+        }
+        return new GameMemento(players, currentPlayerIndex, true);
+    }
+
     List<Character> players() {
         return players;
     }

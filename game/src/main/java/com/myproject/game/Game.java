@@ -18,13 +18,22 @@ public final class Game implements GameEngine {
             throw new IllegalStateException("Players cannot be added after the game starts");
         }
         Character addedPlayer = Objects.requireNonNull(player, "Player must not be null");
+        if (players.contains(addedPlayer)) {
+            throw new IllegalArgumentException("A character can only be added once");
+        }
         players.add(addedPlayer);
         notifyObservers(new GameEvent(GameEvent.Type.PLAYER_ADDED, addedPlayer.getName()));
     }
 
     public void start() {
+        if (started) {
+            throw new IllegalStateException("The game has already started");
+        }
         if (players.size() < 2) {
             throw new IllegalStateException("At least two players are required");
+        }
+        if (players.stream().anyMatch(player -> player.getHealth() <= 0)) {
+            throw new IllegalStateException("All players must have more than 0 HP");
         }
         started = true;
         currentPlayerIndex = 0;
@@ -69,7 +78,7 @@ public final class Game implements GameEngine {
     }
 
     public String attack(Character target) {
-        Character attacker = getCurrentPlayer();
+        Character attacker = getActivePlayer();
         requireOpponent(target, attacker);
         String result = attacker.attack(target);
         nextTurn();
@@ -78,8 +87,8 @@ public final class Game implements GameEngine {
     }
 
     public String useAbility(String abilityName, Character target) {
-        Character user = getCurrentPlayer();
-        requireTarget(target);
+        Character user = getActivePlayer();
+        requireParticipant(target);
         String result = user.useAbility(abilityName, target);
         nextTurn();
         notifyObservers(new GameEvent(GameEvent.Type.ABILITY_USED, result));
@@ -87,9 +96,16 @@ public final class Game implements GameEngine {
     }
 
     public String defend() {
-        String result = getCurrentPlayer().defend();
+        String result = getActivePlayer().defend();
         nextTurn();
         notifyObservers(new GameEvent(GameEvent.Type.DEFENDED, result));
+        return result;
+    }
+
+    public String heal(int amount) {
+        String result = getActivePlayer().heal(amount);
+        nextTurn();
+        notifyObservers(new GameEvent(GameEvent.Type.HEALED, result));
         return result;
     }
 
@@ -105,20 +121,41 @@ public final class Game implements GameEngine {
     }
 
     private void nextTurn() {
-        if (!isOver()) {
-            currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
+        if (isOver()) {
+            return;
+        }
+        for (int offset = 1; offset <= players.size(); offset++) {
+            int nextIndex = (currentPlayerIndex + offset) % players.size();
+            if (players.get(nextIndex).getHealth() > 0) {
+                currentPlayerIndex = nextIndex;
+                return;
+            }
         }
     }
 
     private void requireOpponent(Character target, Character attacker) {
-        requireTarget(target);
+        requireParticipant(target);
         if (target == attacker) {
             throw new IllegalArgumentException("A player cannot attack themselves");
         }
     }
 
-    private static void requireTarget(Character target) {
+    private void requireParticipant(Character target) {
         Objects.requireNonNull(target, "Target must not be null");
+        if (!players.contains(target)) {
+            throw new IllegalArgumentException("Target is not a player in this game");
+        }
+        if (target.getHealth() <= 0) {
+            throw new IllegalArgumentException("A defeated player cannot be targeted");
+        }
+    }
+
+    private Character getActivePlayer() {
+        ensureStarted();
+        if (isOver()) {
+            throw new IllegalStateException("The game is over");
+        }
+        return players.get(currentPlayerIndex);
     }
 
     private void ensureStarted() {

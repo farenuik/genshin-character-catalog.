@@ -15,10 +15,24 @@ java -jar app/target/app-1.0.0.jar
 ```shell
 java -jar app/target/app-1.0.0.jar --chars
 java -jar app/target/app-1.0.0.jar --gui
+java -jar app/target/app-1.0.0.jar --game
 java -jar app/target/app-1.0.0.jar --text
 ```
 
-Графічний режим потребує середовища з підтримкою Swing. Для завантаження актуального каталогу й портретів потрібне підключення до інтернету та доступність Genshin DB API (`genshin-db-api.vercel.app`); GUI має офлайн-демо. Створені персонажі зберігаються у `%USERPROFILE%\.genshin-cli\characters.json` на Windows або `~/.genshin-cli/characters.json` на Linux/macOS. Кеш портретів зберігається поруч у каталозі `portraits`.
+Графічні режими потребують середовища з підтримкою Swing. Каталог (`--gui`) завантажує актуальні дані й портрети з Genshin DB API (`genshin-db-api.vercel.app`); якщо API недоступне, показується офлайн-демо. Гра (`--game`) використовує локальний каталог. Створені персонажі зберігаються у `%USERPROFILE%\.genshin-cli\characters.json` на Windows або `~/.genshin-cli/characters.json` на Linux/macOS. Кеш портретів зберігається поруч у каталозі `portraits`.
+
+У режимі `--chars` можна створити або імпортувати двох персонажів, а потім почати матч:
+
+```text
+game start
+turn attack
+turn defend
+game status
+game history
+```
+
+`game start` покаже доступних персонажів і попросить вибрати учасників. Також їх можна передати одразу: `game start <id-1> <id-2>`. Кожен хід виконується від імені поточного учасника; підтримуються `attack`, `defend`, `heal` і `ability`. Механіки та формули описані в [DESIGN.md](./DESIGN.md).
+Стан і журнал останнього матчу автоматично зберігаються після кожного ходу у `%USERPROFILE%\.genshin-cli\last-game.json` (Windows) або `~/.genshin-cli/last-game.json` (Linux/macOS). Для відновлення виконайте `game load`; команди `game save` і `game history` доступні в режимі персонажів.
 
 ## Збірка з початкового коду
 

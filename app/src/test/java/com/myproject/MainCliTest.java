@@ -21,6 +21,11 @@ class MainCliTest {
     }
 
     @Test
+    void resolvesGraphicalGameModeFromCliArgs() {
+        assertEquals(Main.Mode.GAME, Main.resolveMode(new String[] {"--game"}));
+    }
+
+    @Test
     void usesDefaultTextModeWhenNoOptionsProvided() {
         assertEquals(Main.Mode.TEXT, Main.resolveMode(new String[0]));
     }

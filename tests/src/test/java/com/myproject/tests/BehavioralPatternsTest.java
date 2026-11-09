@@ -1,8 +1,10 @@
 package com.myproject.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.myproject.game.Character;
 import com.myproject.game.Game;
@@ -99,5 +101,85 @@ class BehavioralPatternsTest {
         assertEquals(30, second.getHealth());
         assertSame(first, game.getCurrentPlayer());
         assertTrue(game.getPlayers().contains(second));
+    }
+
+    @Test
+    void attacksApplyArmorAndHalveTheNextBasicAttackAfterDefending() {
+        Game game = new Game();
+        Character attacker = new Character("Attacker", 100, 0, 20);
+        Character defender = new Character("Defender", 100, 7, 10);
+        game.addPlayer(attacker);
+        game.addPlayer(defender);
+        game.start();
+
+        assertEquals("Attacker attacks Defender for 13 damage.", game.attack(defender));
+        assertEquals(87, defender.getHealth());
+        assertEquals("Defender braces for the next attack.", game.defend());
+        assertEquals("Attacker attacks Defender for 6 damage.", game.attack(defender));
+        assertEquals(81, defender.getHealth());
+        assertFalse(defender.isDefending());
+    }
+
+    @Test
+    void minimumDamageIsOneAndHealingIsCappedAtMaximumHealth() {
+        Game game = new Game();
+        Character weak = new Character("Weak", 50, 0, 0);
+        Character armored = new Character("Armored", 50, 100, 0);
+        game.addPlayer(weak);
+        game.addPlayer(armored);
+        game.start();
+
+        game.attack(armored);
+        assertEquals(49, armored.getHealth());
+        game.defend();
+        game.attack(armored);
+        assertEquals(48, armored.getHealth());
+
+        game.heal(18);
+        assertEquals(50, armored.getHealth());
+        assertSame(weak, game.getCurrentPlayer());
+    }
+
+    @Test
+    void defeatedPlayersAreSkippedWhenSelectingTheNextTurn() {
+        Game game = new Game();
+        Character first = new Character("First", 100, 0, 10);
+        Character defeated = new Character("Defeated", 5, 0, 1);
+        Character third = new Character("Third", 100, 0, 10);
+        game.addPlayer(first);
+        game.addPlayer(defeated);
+        game.addPlayer(third);
+        game.start();
+
+        game.attack(defeated);
+        assertEquals(0, defeated.getHealth());
+        assertSame(third, game.getCurrentPlayer());
+        assertFalse(game.isOver());
+    }
+
+    @Test
+    void finishedGamesRejectFurtherActions() {
+        Game game = new Game();
+        Character winner = new Character("Winner", 10, 0, 10);
+        Character loser = new Character("Loser", 10, 0, 10);
+        game.addPlayer(winner);
+        game.addPlayer(loser);
+        game.start();
+
+        game.attack(loser);
+
+        assertTrue(game.isOver());
+        assertSame(winner, game.getWinner());
+        assertThrows(IllegalStateException.class, game::defend);
+    }
+
+    @Test
+    void rejectsAddingTheSameCharacterMoreThanOnce() {
+        Game game = new Game();
+        Character player = new Character("Player", 100, 0, 10);
+        game.addPlayer(player);
+
+        assertThrows(IllegalArgumentException.class, () -> game.addPlayer(player));
+        assertEquals(1, game.getPlayers().size());
     }
 }

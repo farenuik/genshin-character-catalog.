@@ -8,6 +8,7 @@ public record GameEvent(Type type, String description) {
         ATTACK,
         ABILITY_USED,
         DEFENDED,
+        HEALED,
         RESTORED
     }
 }

@@ -34,9 +34,11 @@ public final class Character {
     }
 
     public String getName() { return name; }
+    public int getMaxHealth() { return maxHealth; }
     public int getHealth() { return health; }
     public int getArmor() { return armor; }
     public int getAttack() { return attack; }
+    public boolean isDefending() { return defending; }
     public CharacterProfile getProfile() { return profile; }
     public Map<String, Ability> getAbilities() {
         return Collections.unmodifiableMap(abilities);
@@ -60,7 +62,7 @@ public final class Character {
         return name + " heals for " + restored + " health.";
     }
 
-    /** Doubles effective armor against the next incoming attack. */
+    /** Reduces the next incoming basic attack's damage by half, with a minimum of 1. */
     public String defend() {
         defending = true;
         return name + " braces for the next attack.";
@@ -89,6 +91,17 @@ public final class Character {
             throw new IllegalArgumentException("Ability name and ability must not be null or blank");
         }
         abilities.put(abilityName, ability);
+    }
+
+    /** Restores mutable combat values from a persisted game snapshot. */
+    public void restoreCombatState(int health, int armor, int attack, boolean defending) {
+        if (health < 0 || health > maxHealth || armor < 0 || attack < 0) {
+            throw new IllegalArgumentException("Invalid combat state");
+        }
+        this.health = health;
+        this.armor = armor;
+        this.attack = attack;
+        this.defending = defending;
     }
 
     State saveState() {
