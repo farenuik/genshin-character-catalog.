@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 public final class GenshinApiClient implements GenshinDataSource {
-    private static final String DEFAULT_BASE_URL = "https://genshin.jmp.blue";
+    private static final String DEFAULT_BASE_URL = "https://genshin-db-api.vercel.app/api";
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -37,12 +37,12 @@ public final class GenshinApiClient implements GenshinDataSource {
 
     @Override
     public List<String> listCharacterIds() throws IOException {
-        return getStringList("/characters");
+        return getStringList("/v5/characters?query=names&matchCategories=true");
     }
 
     @Override
     public List<String> listWeaponIds() throws IOException {
-        return getStringList("/weapons");
+        return getStringList("/v5/weapons?query=names&matchCategories=true");
     }
 
     @Override
@@ -54,7 +54,7 @@ public final class GenshinApiClient implements GenshinDataSource {
                 entry.rarity(),
                 entry.element(),
                 entry.weaponType(),
-                entry.skills(),
+                getCharacterSkills(id),
                 entry.imageUrl());
         int health = randomStat(800 + entry.rarity() * 200, 1000 + entry.rarity() * 250);
         int armor = randomStat(40 + entry.rarity() * 20, 70 + entry.rarity() * 25);
@@ -64,31 +64,56 @@ public final class GenshinApiClient implements GenshinDataSource {
 
     @Override
     public CharacterCatalogEntry getCharacterCatalogEntry(String id) throws IOException {
-        String encodedId = encode(id);
-        JsonNode data = getJson("/characters/" + encodedId + "?lang=en");
-        List<CharacterSkill> skills = new ArrayList<>();
-        appendSkills(skills, data.path("skillTalents"), "Combat");
-        appendSkills(skills, data.path("passiveTalents"), "Passive");
-        appendSkills(skills, data.path("constellations"), "Constellation");
+        JsonNode data = getJson("/v5/characters?query=" + encode(id));
+        if (data == null || data.isNull()) {
+            throw new IOException("Genshin data API returned no character for query: " + id);
+        }
+        JsonNode images = data.path("images");
+        String imageUrl = text(images, "hoyowiki_icon", text(images, "mihoyo_icon", ""));
         return new CharacterCatalogEntry(
                 id,
                 text(data, "name", id),
                 text(data, "description", ""),
                 integer(data, "rarity", 4),
-                text(data, "vision", ""),
-                text(data, "weapon", ""),
-                baseUrl + "/characters/" + encodedId + "/icon",
-                skills);
+                text(data, "elementText", ""),
+                text(data, "weaponText", ""),
+                imageUrl,
+                List.of());
     }
 
     @Override
     public Equipment getWeapon(String id) throws IOException {
-        JsonNode data = getJson("/weapons/" + encode(id) + "?lang=en");
+        JsonNode data = getJson("/v5/weapons?query=" + encode(id));
+        if (data == null || data.isNull()) {
+            throw new IOException("Genshin data API returned no weapon for query: " + id);
+        }
         String name = text(data, "name", id);
-        String description = text(data, "passiveDesc", text(data, "description", ""));
-        String weaponType = text(data, "type", "");
-        return new Equipment(name, integer(data, "baseAttack", 0), 0, null,
+        String description = text(data.path("r1"), "description",
+                text(data, "effectName", text(data, "description", "")));
+        String weaponType = text(data, "weaponText", "");
+        return new Equipment(name, (int) Math.round(decimal(data, "baseAtkValue", 0)), 0, null,
                 description, integer(data, "rarity", 0), weaponType);
+    }
+
+    private List<CharacterSkill> getCharacterSkills(String id) throws IOException {
+        JsonNode talents = getJson("/v5/talents?query=" + encode(id));
+        List<CharacterSkill> skills = new ArrayList<>();
+        appendNumberedSkills(skills, talents, "combat", 3, "Combat");
+        appendNumberedSkills(skills, talents, "passive", 3, "Passive");
+        appendNumberedSkills(skills, talents, "constellation", 6, "Constellation");
+        return List.copyOf(skills);
+    }
+
+    private static void appendNumberedSkills(
+            List<CharacterSkill> result, JsonNode talents, String prefix, int count, String type) {
+        for (int index = 1; index <= count; index++) {
+            JsonNode talent = talents.path(prefix + index);
+            String name = text(talent, "name", "");
+            String description = text(talent, "description", text(talent, "descriptionRaw", ""));
+            if (!name.isBlank() || !description.isBlank()) {
+                result.add(new CharacterSkill(name, description, type));
+            }
+        }
     }
 
     private List<String> getStringList(String path) throws IOException {
@@ -112,23 +137,16 @@ public final class GenshinApiClient implements GenshinDataSource {
             response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new IOException("Request to Genshin API was interrupted", exception);
+            throw new IOException("Request to Genshin data API was interrupted", exception);
         }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IOException("Genshin API returned HTTP " + response.statusCode() + " for " + path);
+            throw new IOException("Genshin data API returned HTTP " + response.statusCode() + " for " + path);
         }
-        return objectMapper.readTree(response.body());
-    }
-
-    private static void appendSkills(List<CharacterSkill> result, JsonNode skills, String type) {
-        if (!skills.isArray()) return;
-        for (JsonNode skill : skills) {
-            String name = text(skill, "name", "");
-            String description = text(skill, "description", "");
-            if (!name.isBlank() || !description.isBlank()) {
-                result.add(new CharacterSkill(name, description, type));
-            }
+        JsonNode result = objectMapper.readTree(response.body());
+        if (result == null) {
+            throw new IOException("Genshin data API returned an empty response for " + path);
         }
+        return result;
     }
 
     private static String text(JsonNode node, String field, String fallback) {
@@ -141,6 +159,16 @@ public final class GenshinApiClient implements GenshinDataSource {
         if (value.canConvertToInt()) return value.asInt();
         try {
             return Integer.parseInt(value.asText());
+        } catch (NumberFormatException exception) {
+            return fallback;
+        }
+    }
+
+    private static double decimal(JsonNode node, String field, double fallback) {
+        JsonNode value = node.path(field);
+        if (value.isNumber()) return value.asDouble();
+        try {
+            return Double.parseDouble(value.asText());
         } catch (NumberFormatException exception) {
             return fallback;
         }

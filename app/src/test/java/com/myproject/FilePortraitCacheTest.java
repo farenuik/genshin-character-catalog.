@@ -17,7 +17,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class FilePortraitCacheTest {
-    private static final byte[] PORTRAIT_BYTES = new byte[] {(byte) 0x89, 'P', 'N', 'G'};
+    private static final byte[] PORTRAIT_BYTES = new byte[] {
+        (byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a
+    };
 
     @TempDir
     Path temporaryDirectory;
@@ -64,7 +66,25 @@ class FilePortraitCacheTest {
 
         assertEquals(firstDownload, cachedDownload);
         assertTrue(Files.isRegularFile(firstDownload));
+        assertTrue(firstDownload.getFileName().toString().endsWith(".png"));
         assertArrayEquals(PORTRAIT_BYTES, Files.readAllBytes(firstDownload));
+        assertEquals(1, requestCount.get());
+    }
+
+    @Test
+    void renamesLegacyImageCacheToItsImageExtension() throws IOException {
+        FilePortraitCache cache = new FilePortraitCache(temporaryDirectory.resolve("portraits"));
+        Path previousCacheFile = cache.cache(imageUrl);
+        Path legacyCacheFile = previousCacheFile.resolveSibling(
+                previousCacheFile.getFileName().toString().replaceFirst("\\.png$", ".img"));
+        Files.move(previousCacheFile, legacyCacheFile);
+
+        Path migratedCacheFile = cache.cache(imageUrl);
+
+        assertTrue(migratedCacheFile.getFileName().toString().endsWith(".png"));
+        assertTrue(Files.isRegularFile(migratedCacheFile));
+        assertTrue(Files.notExists(legacyCacheFile));
+        assertArrayEquals(PORTRAIT_BYTES, Files.readAllBytes(migratedCacheFile));
         assertEquals(1, requestCount.get());
     }
 

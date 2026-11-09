@@ -46,13 +46,28 @@ public final class FilePortraitCache implements PortraitCache {
     @Override
     public synchronized Path cache(String imageUrl) throws IOException {
         URI imageUri = parseImageUri(imageUrl);
-        Path imageFile = directory.resolve(sha256(imageUrl) + ".img");
-        if (Files.isRegularFile(imageFile)) {
-            long cachedSize = Files.size(imageFile);
-            if (cachedSize > 0 && cachedSize <= MAX_IMAGE_SIZE) {
-                return imageFile;
+        String fileName = sha256(imageUrl);
+        for (String extension : new String[] {"png", "jpg", "gif", "bmp", "webp", "img"}) {
+            Path cachedFile = directory.resolve(fileName + "." + extension);
+            if (Files.isRegularFile(cachedFile)) {
+                long cachedSize = Files.size(cachedFile);
+                if (cachedSize > 0 && cachedSize <= MAX_IMAGE_SIZE) {
+                    if ("img".equals(extension)) {
+                        String detectedExtension = detectExtension(cachedFile);
+                        if (detectedExtension != null) {
+                            Path renamedFile = directory.resolve(fileName + "." + detectedExtension);
+                            try {
+                                return Files.move(cachedFile, renamedFile, StandardCopyOption.REPLACE_EXISTING);
+                            } catch (IOException exception) {
+                                throw new IOException("Could not rename cached portrait to ." + detectedExtension,
+                                        exception);
+                            }
+                        }
+                    }
+                    return cachedFile;
+                }
+                Files.delete(cachedFile);
             }
-            Files.delete(imageFile);
         }
 
         Files.createDirectories(directory);
@@ -80,17 +95,54 @@ public final class FilePortraitCache implements PortraitCache {
                 if (imageSize == 0) {
                     throw new IOException("Portrait image must not be empty");
                 }
+                Path imageFile = directory.resolve(fileName + "." + extensionForContentType(contentType));
+                try {
+                    Files.move(temporaryFile, imageFile,
+                            StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } catch (AtomicMoveNotSupportedException exception) {
+                    Files.move(temporaryFile, imageFile, StandardCopyOption.REPLACE_EXISTING);
+                }
+                return imageFile;
             }
-
-            try {
-                Files.move(temporaryFile, imageFile,
-                        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporaryFile, imageFile, StandardCopyOption.REPLACE_EXISTING);
-            }
-            return imageFile;
         } finally {
             Files.deleteIfExists(temporaryFile);
+        }
+    }
+
+    private static String extensionForContentType(String contentType) {
+        return switch (contentType) {
+            case "image/png" -> "png";
+            case "image/jpeg", "image/jpg" -> "jpg";
+            case "image/gif" -> "gif";
+            case "image/bmp", "image/x-ms-bmp" -> "bmp";
+            case "image/webp" -> "webp";
+            default -> "img";
+        };
+    }
+
+    private static String detectExtension(Path imageFile) throws IOException {
+        byte[] signature = new byte[8];
+        try (InputStream input = Files.newInputStream(imageFile)) {
+            int bytesRead = input.read(signature);
+            if (bytesRead >= 8
+                    && (signature[0] & 0xff) == 0x89
+                    && signature[1] == 'P' && signature[2] == 'N' && signature[3] == 'G'
+                    && signature[4] == 0x0d && signature[5] == 0x0a
+                    && signature[6] == 0x1a && signature[7] == 0x0a) {
+                return "png";
+            }
+            if (bytesRead >= 3 && (signature[0] & 0xff) == 0xff
+                    && (signature[1] & 0xff) == 0xd8 && (signature[2] & 0xff) == 0xff) {
+                return "jpg";
+            }
+            if (bytesRead >= 6 && signature[0] == 'G' && signature[1] == 'I'
+                    && signature[2] == 'F' && signature[3] == '8') {
+                return "gif";
+            }
+            if (bytesRead >= 2 && signature[0] == 'B' && signature[1] == 'M') {
+                return "bmp";
+            }
+            return null;
         }
     }
 

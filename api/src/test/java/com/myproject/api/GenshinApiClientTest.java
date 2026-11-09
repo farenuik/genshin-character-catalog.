@@ -1,10 +1,10 @@
 package com.myproject.api;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.myproject.game.Character;
+import com.myproject.game.CharacterSkill;
 import com.myproject.game.Equipment;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -22,22 +22,27 @@ class GenshinApiClientTest {
     @BeforeEach
     void startServer() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/characters", exchange -> respond(exchange, switch (exchange.getRequestURI().getPath()) {
-            case "/characters" -> "[\"amber\",\"lisa\"]";
-            default -> """
-                    {"name":"Amber","rarity":4,"vision":"Pyro","weapon":"Bow",
-                     "description":"A reliable outrider.",
-                     "skillTalents":[{"name":"Explosive Puppet","description":"Deploys Baron Bunny."}],
-                     "passiveTalents":[{"name":"Gliding Champion","description":"Reduces gliding stamina."}]}
-                    """;
-        }));
-        server.createContext("/weapons", exchange -> respond(exchange, switch (exchange.getRequestURI().getPath()) {
-            case "/weapons" -> "[\"favonius-warbow\"]";
-            default -> """
-                    {"name":"Favonius Warbow","type":"Bow","rarity":4,
-                     "baseAttack":41,"passiveDesc":"CRIT hits generate energy."}
-                    """;
-        }));
+        server.createContext("/v5/characters", exchange -> respond(exchange,
+                exchange.getRequestURI().getRawQuery().contains("query=names")
+                        ? "[\"Amber\",\"Lisa\"]"
+                        : """
+                                {"name":"Amber","rarity":4,"elementText":"Pyro","weaponText":"Bow",
+                                 "description":"A reliable outrider.",
+                                 "images":{"hoyowiki_icon":"https://example.test/amber.png"}}
+                                """));
+        server.createContext("/v5/talents", exchange -> respond(exchange, """
+                {"combat1":{"name":"Sharpshooter","description":"A bow attack."},
+                 "combat2":{"name":"Explosive Puppet","description":"Deploys Baron Bunny."},
+                 "passive1":{"name":"Gliding Champion","description":"Reduces gliding stamina."}}
+                """));
+        server.createContext("/v5/weapons", exchange -> respond(exchange,
+                exchange.getRequestURI().getRawQuery().contains("query=names")
+                        ? "[\"Favonius Warbow\"]"
+                        : """
+                                {"name":"Favonius Warbow","weaponText":"Bow","rarity":4,
+                                 "baseAtkValue":41.0671,
+                                 "r1":{"description":"CRIT hits generate energy."}}
+                                """));
         server.start();
         client = new GenshinApiClient(java.net.http.HttpClient.newHttpClient(),
                 "http://127.0.0.1:" + server.getAddress().getPort());
@@ -50,21 +55,20 @@ class GenshinApiClientTest {
 
     @Test
     void listsEntitiesAndMapsCharacterAndWeaponData() throws IOException {
-        assertEquals(List.of("amber", "lisa"), client.listCharacterIds());
-        assertEquals(List.of("favonius-warbow"), client.listWeaponIds());
+        assertEquals(List.of("Amber", "Lisa"), client.listCharacterIds());
+        assertEquals(List.of("Favonius Warbow"), client.listWeaponIds());
 
-        Character character = client.getCharacter("amber");
+        Character character = client.getCharacter("Amber");
         assertEquals("Amber", character.getName());
         assertEquals("Pyro", character.getProfile().element());
         assertEquals("Bow", character.getProfile().weaponType());
-        assertEquals(2, character.getProfile().skills().size());
-        assertEquals("http://127.0.0.1:" + server.getAddress().getPort() + "/characters/amber/icon",
-                character.getProfile().imageUrl());
+        assertEquals(3, character.getProfile().skills().size());
+        assertEquals("https://example.test/amber.png", character.getProfile().imageUrl());
         assertTrue(character.getHealth() >= 1600 && character.getHealth() <= 2000);
         assertTrue(character.getArmor() >= 120 && character.getArmor() <= 170);
         assertTrue(character.getAttack() >= 180 && character.getAttack() <= 245);
 
-        Equipment weapon = client.getWeapon("favonius-warbow");
+        Equipment weapon = client.getWeapon("Favonius Warbow");
         assertEquals("Favonius Warbow", weapon.getName());
         assertEquals(41, weapon.getAttackBonus());
         assertEquals("Bow", weapon.getWeaponType());
@@ -73,22 +77,23 @@ class GenshinApiClientTest {
 
     @Test
     void parsesApiJsonIntoImmutableCatalogEntryWithoutInventingCombatStats() throws IOException {
-        CharacterCatalogEntry entry = client.getCharacterCatalogEntry("amber");
+        CharacterCatalogEntry entry = client.getCharacterCatalogEntry("Amber");
 
-        assertEquals("amber", entry.id());
+        assertEquals("Amber", entry.id());
         assertEquals("Amber", entry.name());
         assertEquals("A reliable outrider.", entry.description());
         assertEquals(4, entry.rarity());
         assertEquals("Pyro", entry.element());
         assertEquals("Bow", entry.weaponType());
-        assertEquals("http://127.0.0.1:" + server.getAddress().getPort() + "/characters/amber/icon",
-                entry.imageUrl());
-        assertEquals(List.of("Combat", "Passive"),
-                entry.skills().stream().map(skill -> skill.type()).toList());
-        assertFalse(entry.skills().isEmpty());
+        assertEquals("https://example.test/amber.png", entry.imageUrl());
+        assertTrue(entry.skills().isEmpty());
+        CharacterCatalogEntry withSkill = new CharacterCatalogEntry(
+                entry.id(), entry.name(), entry.description(), entry.rarity(), entry.element(),
+                entry.weaponType(), entry.imageUrl(),
+                List.of(new CharacterSkill("Sharpshooter", "A bow attack.", "Combat")));
         org.junit.jupiter.api.Assertions.assertThrows(
                 UnsupportedOperationException.class,
-                () -> entry.skills().add(entry.skills().get(0)));
+                () -> withSkill.skills().add(withSkill.skills().get(0)));
     }
 
     private static void respond(com.sun.net.httpserver.HttpExchange exchange, String body) throws IOException {
