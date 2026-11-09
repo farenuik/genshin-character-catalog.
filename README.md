@@ -7,16 +7,16 @@
 Потрібна **Java 21 або новіша**. Maven для запуску готового JAR не потрібен.
 
 ```shell
-java -jar app/target/app-1.0.0.jar
+java -jar app/target/app-1.1.0.jar
 ```
 
 Без аргументів застосунок покаже меню режимів. Режим можна вибрати аргументом:
 
 ```shell
-java -jar app/target/app-1.0.0.jar --chars
-java -jar app/target/app-1.0.0.jar --gui
-java -jar app/target/app-1.0.0.jar --game
-java -jar app/target/app-1.0.0.jar --text
+java -jar app/target/app-1.1.0.jar --chars
+java -jar app/target/app-1.1.0.jar --gui
+java -jar app/target/app-1.1.0.jar --game
+java -jar app/target/app-1.1.0.jar --text
 ```
 
 Графічні режими потребують середовища з підтримкою Swing. Каталог (`--gui`) завантажує актуальні дані й портрети з Genshin DB API (`genshin-db-api.vercel.app`); якщо API недоступне, показується офлайн-демо. Гра (`--game`) використовує локальний каталог. Створені персонажі зберігаються у `%USERPROFILE%\.genshin-cli\characters.json` на Windows або `~/.genshin-cli/characters.json` на Linux/macOS. Кеш портретів зберігається поруч у каталозі `portraits`.
@@ -45,7 +45,7 @@ mvn clean package
 Збірка запускає тести модулів і створює автономний executable JAR:
 
 ```text
-app/target/app-1.0.0.jar
+app/target/app-1.1.0.jar
 ```
 
 У JAR включено застосунок, потрібні модулі проєкту та бібліотеку Jackson. Для передавання достатньо цього одного файлу; користувачу потрібна Java 21+, але не Maven. Для запуску в Windows можна використати ті самі команди `java -jar` у PowerShell або командному рядку.
